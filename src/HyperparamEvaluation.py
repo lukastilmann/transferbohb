@@ -1,23 +1,25 @@
+import torch
+
 class HyperparamEvaluation:
 
-  def __init__(self, budget, dataloader_train, dataloader_val, model, criterion, optimizer):
-    self.budget = budget
+  def __init__(self, dataloader_train, dataloader_val, model, criterion, optimizer):
+    self.budget_spent = 0
     self.dataloader_train = dataloader_train
     self.dataloader_val = dataloader_val
     self.model = model
     self.criterion = criterion
     self.optimizer = optimizer
+    self.epochs = 0
 
-  def evaluate(self):
+  def evaluate(self, budget):
 
     # Training loop
-    num_epochs = 100
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     self.model.to(device)
-    start_time = time.time()
+    last_time = time.time()
     self.model.train()
 
-    for epoch in range(num_epochs):
+    while (self.budget_spent < budget):
       running_loss = 0.0
       for batch in self.dataloader_train:
         inputs, labels = batch['image'], batch['label']
@@ -28,20 +30,20 @@ class HyperparamEvaluation:
         loss = self.criterion(outputs, labels)
         loss.backward()
         self.optimizer.step()
-
         running_loss += loss.item()
 
-        elapsed_time = time.time() - start_time
-        if elapsed_time > self.budget:
-          print(f"Budget ({self.budget} seconds) surpassed after {epoch+1} epochs.")
+        new_time = time.time()
+        self.budget_spent = self.budget_spent + (new_time - last_time)
+        last_time = new_time
+
+        if self.budget_spent > budget:
           break
 
-      print(f"Epoch [{epoch+1}/{num_epochs}] - Loss: {running_loss / len(self.dataloader_train):.4f}")
-      elapsed_time = time.time() - start_time
-      if elapsed_time > self.budget:
-        break
+      self.epochs += 1
 
-    # calculating validation loss
+    print(f"Budget ({budget} seconds) surpassed after {self.epochs} epochs - Loss: {running_loss / len(self.dataloader_train):.4f}")
+
+    #calculating validation loss
     total_loss = 0.0
     total_samples = 0
     self.model.eval()
